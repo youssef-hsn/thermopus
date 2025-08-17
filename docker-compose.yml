@@ -1,0 +1,106 @@
+
+networks:
+  monitoring: {}
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+  thanos_bucket: {} # shared “object store” for Thanos FILESYSTEM backend
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-admin-api
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks: [monitoring]
+
+  thanos-sidecar:
+    image: quay.io/thanos/thanos:v0.36.1
+    container_name: thanos-sidecar
+    depends_on: [prometheus]
+    command:
+      - sidecar
+      - --prometheus.url=http://prometheus:9090
+      - --tsdb.path=/prometheus
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --shipper.upload-compacted
+    volumes:
+      - prometheus_data:/prometheus:ro
+      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
+      - thanos_bucket:/thanos/bucket
+    networks: [monitoring]
+
+  thanos-store:
+    image: quay.io/thanos/thanos:v0.36.1
+    container_name: thanos-store
+    depends_on: [thanos-sidecar]
+    command:
+      - store
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --http-address=0.0.0.0:10902
+      - --grpc-address=0.0.0.0:10901
+    volumes:
+      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
+      - thanos_bucket:/thanos/bucket
+    ports:
+      - "10902:10902" # UI / metrics
+    networks: [monitoring]
+
+  thanos-query:
+    image: quay.io/thanos/thanos:v0.36.1
+    container_name: thanos-query
+    depends_on: [thanos-sidecar, thanos-store]
+    command:
+      - query
+      - --http-address=0.0.0.0:10902
+      - --grpc-address=0.0.0.0:10901
+      - --query.replica-label=replica
+      - --store=thanos-sidecar:10901
+      - --store=thanos-store:10901
+    ports:
+      - "10902:10902" # Thanos Query UI at http://localhost:10902
+    networks: [monitoring]
+
+  thanos-compactor:
+    image: quay.io/thanos/thanos:v0.36.1
+    container_name: thanos-compactor
+    depends_on: [thanos-sidecar]
+    command:
+      - compact
+      - --objstore.config-file=/etc/thanos/objstore.yml
+      - --wait
+    volumes:
+      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
+      - thanos_bucket:/thanos/bucket
+    networks: [monitoring]
+
+  grafana:
+    image: grafana/grafana:10.4.6
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks: [monitoring]
+
+  python-collector:
+    build: ./collector
+    container_name: python-collector
+    environment:
+      - PORT=8000
+    ports:
+      - "8000:8000"
+    networks: [monitoring]
+    # restart: unless-stopped
