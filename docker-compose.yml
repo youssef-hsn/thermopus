@@ -1,106 +1,153 @@
-
-networks:
-  monitoring: {}
-
-volumes:
-  prometheus_data: {}
-  grafana_data: {}
-  thanos_bucket: {} # shared “object store” for Thanos FILESYSTEM backend
-
 services:
+
+  python-worker:
+    image: youssef/python-worker:latest
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: python-worker
+    restart: unless-stopped
+    privileged: true  # needed for hardware access
+    devices:
+      - "/dev/gpiomem:/dev/gpiomem"  # for GPIO access
+    volumes:
+      - /sys/bus/w1/devices:/sys/bus/w1/devices:ro  # for 1-Wire bus access
+    ports:
+      - "9101:9101"  # expose DS18B20 metrics
+    environment:
+      - EXPORTER_PORT=9101
+      - SCRAPE_INTERVAL_SEC=5
+      # Optional: Configure bus-to-pin mapping if needed
+      # - BUS_PIN_MAP={"w1_bus_master1": 4}
   prometheus:
-    image: prom/prometheus:v2.54.1
+    image: prom/prometheus:latest
     container_name: prometheus
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-      - --web.enable-lifecycle
-      - --storage.tsdb.retention.time=15d
-      - --web.enable-admin-api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
-    networks: [monitoring]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+      # Optional: tune retention for Pi storage
+      - "--storage.tsdb.retention.time=15d"
+      - "--storage.tsdb.min-block-duration=2h"
+      - "--storage.tsdb.max-block-duration=2h"
 
-  thanos-sidecar:
-    image: quay.io/thanos/thanos:v0.36.1
+  # Thanos sidecar uploads Prometheus TSDB blocks to local FS "bucket" and
+  # exposes a StoreAPI for Thanos Query
+  prometheus-sidecar:
+    image: quay.io/thanos/thanos:v0.37.2
     container_name: thanos-sidecar
-    depends_on: [prometheus]
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    volumes:
+      - prometheus_data:/prometheus:ro           # read Prometheus blocks
+      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
+      - thanos_bucket:/thanos/bucket             # local “object store”
     command:
       - sidecar
-      - --prometheus.url=http://prometheus:9090
-      - --tsdb.path=/prometheus
-      - --objstore.config-file=/etc/thanos/objstore.yml
-      - --shipper.upload-compacted
-    volumes:
-      - prometheus_data:/prometheus:ro
-      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
-      - thanos_bucket:/thanos/bucket
-    networks: [monitoring]
+      - "--prometheus.url=http://prometheus:9090"
+      - "--tsdb.path=/prometheus"
+      - "--objstore.config-file=/etc/thanos/objstore.yml"
+      - "--http-address=0.0.0.0:10902"
+      - "--grpc-address=0.0.0.0:10901"
+    expose:
+      - "10901"   # gRPC for StoreAPI
+      - "10902"   # HTTP metrics/UI
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:10902/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
+  # Thanos Store Gateway reads historical blocks from the same local bucket
   thanos-store:
-    image: quay.io/thanos/thanos:v0.36.1
+    image: quay.io/thanos/thanos:v0.37.2
     container_name: thanos-store
-    depends_on: [thanos-sidecar]
+    restart: unless-stopped
+    user: "65534:65534"  # Run as nobody:nogroup using UIDs
+    depends_on:
+      prometheus-sidecar:
+        condition: service_healthy
+    volumes:
+      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
+      - thanos_bucket:/thanos/bucket             # must match objstore.yml path
+      - ./thanos/store-data:/data               # bind mount to local directory
     command:
       - store
-      - --objstore.config-file=/etc/thanos/objstore.yml
-      - --http-address=0.0.0.0:10902
-      - --grpc-address=0.0.0.0:10901
-    volumes:
-      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
-      - thanos_bucket:/thanos/bucket
-    ports:
-      - "10902:10902" # UI / metrics
-    networks: [monitoring]
+      - "--objstore.config-file=/etc/thanos/objstore.yml"
+      - "--http-address=0.0.0.0:10902"
+      - "--grpc-address=0.0.0.0:10901"
+      - "--data-dir=/data"
+      - "--log.level=debug"
+    expose:
+      - "10901"
+      - "10902"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:10902/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
+  # Thanos Query federates Prometheus (via sidecar) + Store Gateway
   thanos-query:
-    image: quay.io/thanos/thanos:v0.36.1
+    image: quay.io/thanos/thanos:v0.37.2
     container_name: thanos-query
-    depends_on: [thanos-sidecar, thanos-store]
+    restart: unless-stopped
+    depends_on:
+      prometheus-sidecar:
+        condition: service_healthy
+      thanos-store:
+        condition: service_healthy
+    ports:
+      - "10902:10902"   # Thanos Query UI/API
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:10902/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     command:
       - query
-      - --http-address=0.0.0.0:10902
-      - --grpc-address=0.0.0.0:10901
-      - --query.replica-label=replica
-      - --store=thanos-sidecar:10901
-      - --store=thanos-store:10901
-    ports:
-      - "10902:10902" # Thanos Query UI at http://localhost:10902
-    networks: [monitoring]
-
-  thanos-compactor:
-    image: quay.io/thanos/thanos:v0.36.1
-    container_name: thanos-compactor
-    depends_on: [thanos-sidecar]
-    command:
-      - compact
-      - --objstore.config-file=/etc/thanos/objstore.yml
-      - --wait
-    volumes:
-      - ./thanos/objstore.yml:/etc/thanos/objstore.yml:ro
-      - thanos_bucket:/thanos/bucket
-    networks: [monitoring]
+      - "--http-address=0.0.0.0:10902"
+      - "--grpc-address=0.0.0.0:10901"
+      # Directly register the stores (static discovery)
+      - "--store=prometheus-sidecar:10901"
+      - "--store=thanos-store:10901"
 
   grafana:
-    image: grafana/grafana:10.4.6
+    image: grafana/grafana-oss:latest
     container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      thanos-query:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
     environment:
+      - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - grafana_data:/var/lib/grafana
-    ports:
-      - "3000:3000"
-    networks: [monitoring]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
-  python-collector:
-    build: ./collector
-    container_name: python-collector
-    environment:
-      - PORT=8000
-    ports:
-      - "8000:8000"
-    networks: [monitoring]
-    # restart: unless-stopped
+volumes:
+  prometheus_data:
+  grafana_data:
+  thanos_bucket:
