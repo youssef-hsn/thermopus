@@ -1,7 +1,7 @@
 global:
   scrape_interval: 15s
   external_labels:
-    cluster: "local"
+    cluster: "thermopus"
     replica: "a"
 
 scrape_configs:
@@ -9,6 +9,7 @@ scrape_configs:
     static_configs:
       - targets: ["prometheus:9090"]
 
-  - job_name: python-collector
+  - job_name: python-worker
     static_configs:
-      - targets: ["python-collector:8000"]
+      - targets: ["python-worker:9101"]
+    scrape_interval: 5s 
