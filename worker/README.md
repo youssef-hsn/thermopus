@@ -1,4 +1,4 @@
-## Thermopus Worker
+# Thermopus Worker
 Thermopus worker is a python worker that works with prometheus to log data from DS18B20 sensors
 
 ## Project Structure
@@ -45,3 +45,84 @@ worker/
       ├─ logging.py           # structlog/logging config; JSON logs optional
       └─ asyncio_tools.py     # cancellation shields, jittered sleeps, bounded semaphore
 ``` 
+
+## Setup & Run (Raspberry Pi 5)
+
+### 1) Enable 1-Wire (optionally on multiple GPIO pins)
+The worker relies on the Linux 1-Wire kernel drivers (`w1-gpio`, `w1-therm`). On Raspberry Pi OS Bookworm,
+edit `/boot/firmware/config.txt` and add one `dtoverlay=w1-gpio` line per GPIO you want to use:
+
+#### Single bus (default on GPIO 4)
+
+```
+dtoverlay=w1-gpio,gpiopin=4,pullup=1
+```
+
+#### Multiple buses (example)
+
+```
+dtoverlay=w1-gpio,gpiopin=17,pullup=1
+dtoverlay=w1-gpio,gpiopin=22,pullup=1
+```
+
+#### Reboot, then verify:
+
+```bash
+ls -1 /sys/bus/w1/devices/
+```
+
+> You should see entries like w1_bus_master1 and 28-xxxxxxxxxxxx ROM devices when sensors are attached
+
+### 2) Configure the worker
+Copy the example env and adjust to your wiring and intervals:
+```bash
+cp worker/.env.example worker/.env
+```
+
+#### Edit worker/.env
+**Key variables**:
+- `WORKER_PINS=4,17,22` — BCM GPIOs hosting your 1-Wire buses
+- `WORKER_METRICS_PORT=8000` — Prometheus scrape port
+- `WORKER_SCAN_INTERVAL`, `WORKER_READ_INTERVAL`, `WORKER_READ_TIMEOUT` — support `ms/s/m/h` units
+- `WORKER_LABEL_MAP` — JSON map of ROM → human-friendly name
+
+### 3) Build the Docker image
+From the repository root (folder containing `worker/`):
+
+```bash
+docker build -f worker/dockerfile -t thermopus-worker:latest .
+```
+
+### 4) Run the container
+Mount the host’s 1-Wire sysfs into the container and expose the metrics port.
+
+#### Run with host networking
+```bash
+docker run –rm -it 
+–name thermopus-worker 
+–network host 
+–env-file worker/.env 
+-v /sys/bus/w1:/sys/bus/w1:ro 
+thermopus-worker:latest
+```
+
+#### Health Check
+```bash
+curl http://localhost:8000/metrics
+```
+
+### 5) Prometheus scrape config
+Add a job to your Prometheus configuration:
+
+```yaml
+scrape_configs:
+  - job_name: 'thermopus-worker'
+    static_configs:
+      - targets: ['pi-hostname-or-ip:8000']
+```
+
+### 6) Hot-plug visibility
+
+The worker scans /sys/bus/w1/devices/ periodically (or via inotify if WORKER_USE_INOTIFY=true)
+to log connect/disconnect events. Ensure sensors appear under that directory when plugged in.
+
