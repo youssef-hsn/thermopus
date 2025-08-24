@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY app.py /app
+
+# Keep it minimal: prometheus_client provides the HTTP server
+RUN pip install --no-cache-dir prometheus_client
+
+# Default configuration
+ENV EXPORTER_PORT=9101
+ENV SCRAPE_INTERVAL_SEC=5
+
+# Expose the metrics port
+EXPOSE 9101
+
+# Run with unbuffered output for better logging
+CMD ["python", "-u", "app.py"]
