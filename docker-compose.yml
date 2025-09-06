@@ -13,9 +13,9 @@ services:
     volumes:
       - /sys/bus/w1/devices:/sys/bus/w1/devices:ro  # for 1-Wire bus access
     ports:
-      - "9101:9101"  # expose DS18B20 metrics
+      - "8000:8000"  # expose DS18B20 metrics
     environment:
-      - EXPORTER_PORT=9101
+      - EXPORTER_PORT=8000
       - SCRAPE_INTERVAL_SEC=5
       # Optional: Configure bus-to-pin mapping if needed
       # - BUS_PIN_MAP={"w1_bus_master1": 4}

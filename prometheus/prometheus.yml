@@ -9,7 +9,7 @@ scrape_configs:
     static_configs:
       - targets: ["prometheus:9090"]
 
-  - job_name: python-worker
+  - job_name: thermopus-worker
     static_configs:
-      - targets: ["python-worker:9101"]
+      - targets: ["python-worker:8000"]
     scrape_interval: 5s 
