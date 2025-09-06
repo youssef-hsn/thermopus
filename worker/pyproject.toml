@@ -1,0 +1,40 @@
+[tool.poetry]
+name = "thermopus-worker"
+version = "0.1.0"
+description = "Async DS18B20 worker with Prometheus exporter for Raspberry Pi"
+authors = ["You youssefhsn16@gmail.com"]
+readme = "README.md"
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pydantic = "^2.8.2"
+pydantic-settings = "^2.4.0"
+prometheus-client = "^0.20.0"
+watchdog = "^4.0.0"
+structlog = "^24.1.0"
+typing-extensions = "^4.12.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.2"
+pytest-asyncio = "^0.23.8"
+ruff = "^0.6.2"
+mypy = "^1.11.1"
+
+[tool.poetry.scripts]
+# Optional entrypoint; remove if you'll launch with `python -m src.main`
+ds18b20-worker = "src.main:main"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+strict = true
+ignore_missing_imports = true
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
