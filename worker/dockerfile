@@ -1,17 +1,43 @@
 FROM python:3.11-slim
 
+# Optional but useful for correct timestamps/logging
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-COPY app.py /app
 
-# Keep it minimal: prometheus_client provides the HTTP server
-RUN pip install --no-cache-dir prometheus_client
+# Install runtime dependencies using pyproject.toml for better reproducibility
+COPY pyproject.toml poetry.lock* /app/
+RUN pip install --upgrade pip \
+    && pip install poetry \
+    && poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --only main
 
-# Default configuration
-ENV EXPORTER_PORT=9101
-ENV SCRAPE_INTERVAL_SEC=5
+# Copy source
+COPY src/ /app/src/
+
+# Ensure Python can import from /app/src
+ENV PYTHONPATH=/app/src
+
+# Default configuration (override with --env or --env-file)
+ENV WORKER_METRICS_PORT=8000 \
+    WORKER_SCAN_INTERVAL=5s \
+    WORKER_READ_INTERVAL=2s \
+    WORKER_READ_TIMEOUT=1s \
+    WORKER_FRESHNESS_WINDOW=10s \
+    WORKER_PINS=4 \
+    WORKER_LOG_LEVEL=INFO \
+    WORKER_USE_INOTIFY=false
 
 # Expose the metrics port
-EXPOSE 9101
+EXPOSE 8000
+
+# Healthcheck: confirm the /metrics endpoint is up
+HEALTHCHECK --interval=30s --timeout=2s --start-period=10s --retries=3 \
+  CMD python -c "import sys,urllib.request,os; port=os.environ.get('WORKER_METRICS_PORT','8000'); url=f'http://127.0.0.1:{port}/metrics'; \
+try: r=urllib.request.urlopen(url, timeout=1.5); sys.exit(0 if 200 <= r.status < 400 else 1) \
+except Exception: sys.exit(1)"
 
 # Run with unbuffered output for better logging
-CMD ["python", "-u", "app.py"]
+CMD ["python", "-u", "-m", "main"]
