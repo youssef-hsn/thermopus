@@ -55,7 +55,6 @@ Thermopus is perfect for **IoT temperature monitoring**, **home automation**, an
 | 🧊 **Cold Chain Monitoring** | Fridges, freezers, food storage compliance |
 | 🖥️ **Server Room / Data Center** | Rack temperatures, hot spot detection, cooling efficiency |
 | 🐠 **Aquarium Monitoring** | Water temperature stability for fish tanks |
-| 🍺 **Fermentation Tracking** | Beer brewing, wine making, kombucha temperature control |
 | 🌱 **Greenhouse / Agriculture** | Soil and air temperature logging for plants |
 | ☀️ **Solar / HVAC Systems** | Inlet/outlet temperatures, heat exchanger efficiency |
 | 🏭 **Industrial Monitoring** | Process temperature tracking, equipment monitoring |
