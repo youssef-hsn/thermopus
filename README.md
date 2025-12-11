@@ -1,35 +1,64 @@
 <p align="center">
-  <img src="assets/thermopus.png" alt="Thermopus Logo" width="280"/>
+  <img src="assets/thermopus.png" alt="Thermopus - Raspberry Pi DS18B20 Temperature Monitoring System Logo" width="280"/>
 </p>
 
 <h1 align="center">Thermopus</h1>
 
 <p align="center">
-  <em>A thermal octopus — extending sensor tentacles to monitor temperature everywhere</em>
+  <em>Multi-sensor temperature monitoring for Raspberry Pi with Prometheus, Thanos & Grafana</em>
+</p>
+
+<p align="center">
+  <a href="#quick-start"><img src="https://img.shields.io/badge/docker-ready-blue?logo=docker" alt="Docker Ready"></a>
+  <a href="#python-async-worker"><img src="https://img.shields.io/badge/python-3.11+-green?logo=python" alt="Python 3.11+"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-MIT-yellow" alt="MIT License"></a>
+  <a href="#ds18b20-temperature-sensors"><img src="https://img.shields.io/badge/sensor-DS18B20-orange" alt="DS18B20 Sensor"></a>
+  <a href="#prometheus--thanos"><img src="https://img.shields.io/badge/metrics-Prometheus-red?logo=prometheus" alt="Prometheus Metrics"></a>
+  <a href="#prometheus--thanos"><img src="https://img.shields.io/badge/storage-Thanos-purple" alt="Thanos Storage"></a>
+  <a href="#access-the-dashboards"><img src="https://img.shields.io/badge/dashboard-Grafana-orange?logo=grafana" alt="Grafana Dashboard"></a>
+</p>
+
+<p align="center">
+  <strong>🌡️ Raspberry Pi Temperature Logger | 📊 Real-Time Monitoring | 📈 Long-Term Storage | 🔌 Hot-Plug Sensors</strong>
 </p>
 
 ---
 
-## What is Thermopus?
+## Overview
 
-**Thermopus** is a proof-of-concept project that transforms a Raspberry Pi into an intelligent, multi-location temperature monitoring station. The name combines *thermal* + *octopus* — picture the Pi as the octopus body with DS18B20 temperature sensors as its tentacles, reaching out to measure temperatures in different places simultaneously.
+**Thermopus** is an open-source, self-hosted temperature monitoring solution that transforms a **Raspberry Pi** into a powerful multi-location temperature station. Using **DS18B20 digital temperature sensors** connected via the **1-Wire protocol**, Thermopus auto-discovers sensors, collects readings, and stores them in a production-grade **Prometheus + Thanos** time-series database with beautiful **Grafana dashboards**.
 
-### Why Thermopus?
+> **Think of it as**: The octopus body (Pi) with sensor tentacles reaching out to measure temperatures everywhere — hence *thermal* + *octopus* = **Thermopus** 🐙
 
-- **Auto-discovery**: Plug in a new sensor, and it's automatically detected and tracked — no config changes needed
-- **Hot-plug support**: Sensors can be connected or disconnected on the fly; the system adapts in real-time
-- **Multi-location**: Monitor temperatures across multiple spots (fridge, freezer, room, outdoor, tank inlet, etc.) from a single Pi
-- **Long-term storage**: Historical data preserved via Thanos, enabling trend analysis over weeks or months
-- **Beautiful dashboards**: Grafana provides real-time visualization out of the box
+### Key Features
 
-### Use Cases
+| Feature | Description |
+|---------|-------------|
+| 🔍 **Auto-Discovery** | Plug in a new DS18B20 sensor — automatically detected and tracked |
+| 🔌 **Hot-Plug Support** | Connect or disconnect sensors on the fly; system adapts in real-time |
+| 📍 **Multi-Location** | Monitor temperatures across multiple spots from a single Raspberry Pi |
+| 📦 **Long-Term Storage** | Historical data preserved via Thanos for weeks/months of trend analysis |
+| 📊 **Grafana Dashboards** | Beautiful real-time visualization out of the box |
+| 🐳 **Docker Deployment** | Single `docker compose up` brings the entire stack online |
+| ⚡ **Async Python** | Non-blocking concurrent sensor reads with exponential backoff |
+| 🏷️ **Custom Labels** | Name your sensors (Fridge, Freezer, Server Rack, etc.) |
 
-- 🏠 **Home automation** — monitor room temperatures, HVAC efficiency
-- 🌡️ **Cold chain tracking** — fridges, freezers, food storage
-- 🖥️ **Server room monitoring** — rack temperatures, hot spots
-- 🐠 **Aquariums** — water temperature stability
-- 🥒 **fermentation** — precise temperature control
-- 🌱 **Greenhouses** — soil and air temperature logging
+---
+
+## Use Cases
+
+Thermopus is perfect for **IoT temperature monitoring**, **home automation**, and **industrial applications**:
+
+| Use Case | Application |
+|----------|-------------|
+| 🏠 **Smart Home** | Room temperatures, HVAC efficiency, basement/attic monitoring |
+| 🧊 **Cold Chain Monitoring** | Fridges, freezers, food storage compliance |
+| 🖥️ **Server Room / Data Center** | Rack temperatures, hot spot detection, cooling efficiency |
+| 🐠 **Aquarium Monitoring** | Water temperature stability for fish tanks |
+| 🍺 **Fermentation Tracking** | Beer brewing, wine making, kombucha temperature control |
+| 🌱 **Greenhouse / Agriculture** | Soil and air temperature logging for plants |
+| ☀️ **Solar / HVAC Systems** | Inlet/outlet temperatures, heat exchanger efficiency |
+| 🏭 **Industrial Monitoring** | Process temperature tracking, equipment monitoring |
 
 ---
 
@@ -75,6 +104,20 @@ flowchart LR
 5. **Thanos Sidecar** uploads TSDB blocks to long-term storage
 6. **Thanos Query** federates real-time + historical data
 7. **Grafana** visualizes everything on port 80
+
+---
+
+## Tech Stack
+
+| Component | Purpose |
+|-----------|---------|
+| **Raspberry Pi** | Hardware platform (Pi 4/5 recommended) |
+| **DS18B20** | Digital temperature sensor with 1-Wire interface |
+| **Python 3.11+** | Async worker with prometheus-client, pydantic |
+| **Prometheus** | Time-series database and metrics collection |
+| **Thanos** | Long-term storage, global querying, high availability |
+| **Grafana** | Visualization and dashboards |
+| **Docker Compose** | Container orchestration |
 
 ---
 
@@ -289,7 +332,7 @@ The worker runs three concurrent async loops:
         │  │                                              │          │
     ┌───┴──┴───┐                              ┌───────────┴┐    ┌────┴──────┐
     │ DS18B20  │                              │  DS18B20   │    │  DS18B20  │
-    │ (Sensor 1)│                              │ (Sensor 2) │    │ (Sensor 3)│
+    │(Sensor 1)│                              │ (Sensor 2) │    │ (Sensor 3)│
     └──────────┘                              └────────────┘    └───────────┘
 
     Pin 1: GND (black)
@@ -324,13 +367,21 @@ Ensure the worker container has:
 
 ---
 
+## Related Projects & Inspiration
+
+- [prometheus-client](https://github.com/prometheus/client_python) - Python Prometheus client
+- [Thanos](https://thanos.io/) - Highly available Prometheus setup
+- [Grafana](https://grafana.com/) - Observability platform
+- [w1thermsensor](https://github.com/timofurrer/w1thermsensor) - Python library for 1-Wire sensors
+
+---
+
 ## License
 
-This project is a proof-of-concept for educational purposes.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
 <p align="center">
-  <sub>Built with 🐙 by temperature enthusiasts</sub>
+  <sub>Built with 🐙 by for fun</sub>
 </p>
-
