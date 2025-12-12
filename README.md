@@ -311,38 +311,6 @@ The worker runs three concurrent async loops:
 
 ---
 
-## Wiring Diagram
-
-```
-                    Raspberry Pi
-                   ┌────────────────┐
-                   │                │
-    ┌──────────────┤ GPIO 4 (1-Wire)├──────────┬──────────┬──────────┐
-    │              │                │          │          │          │
-    │   ┌──────────┤ 3.3V           │          │          │          │
-    │   │          │                │          │          │          │
-    │   │  ┌───────┤ GND            │          │          │          │
-    │   │  │       └────────────────┘          │          │          │
-    │   │  │                                   │          │          │
-    │   │  │   4.7kΩ                           │          │          │
-    │   │  │  ┌─────┐                          │          │          │
-    └───┼──┼──┤     ├──────────────────────────┘          │          │
-        │  │  └─────┘                                     │          │
-        │  │                                              │          │
-    ┌───┴──┴───┐                              ┌───────────┴┐    ┌────┴──────┐
-    │ DS18B20  │                              │  DS18B20   │    │  DS18B20  │
-    │(Sensor 1)│                              │ (Sensor 2) │    │ (Sensor 3)│
-    └──────────┘                              └────────────┘    └───────────┘
-
-    Pin 1: GND (black)
-    Pin 2: Data (yellow) → GPIO 4 + 4.7kΩ pull-up to 3.3V
-    Pin 3: VDD (red) → 3.3V
-```
-
-> **Note**: A single 4.7kΩ pull-up resistor between VDD and Data is required. Multiple sensors share the same three wires (parasitic power mode also works with just two wires).
-
----
-
 ## Troubleshooting
 
 ### No sensors detected
